@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  nats-server:
+    build: .
+    container_name: azure-nats-server
+    ports:
+      - "4222:4222"  # Client connections
+      - "8222:8222"  # Monitoring
+      - "6222:6222"  # Cluster routing
+    volumes:
+      - nats-data:/data
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8222/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  nats-data:
+    driver: local

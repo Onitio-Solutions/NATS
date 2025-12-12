@@ -1,0 +1,15 @@
+# Azure NATS Server Deployment Parameters
+# Customize these values for your deployment
+
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "containerGroupName": {
+      "value": "nats-server-storeone"
+    },
+    "dnsNameLabel": {
+      "value": "nats-storeone"
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "containerGroupName": {
+      "type": "string",
+      "defaultValue": "nats-server-storeone",
+      "metadata": {
+        "description": "Name for the container group"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    },
+    "dnsNameLabel": {
+      "type": "string",
+      "defaultValue": "[concat('nats-storeone-', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "DNS name label for the public IP"
+      }
+    }
+  },
+  "variables": {
+    "containerImage": "nats:2.10",
+    "containerName": "nats-server"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ContainerInstance/containerGroups",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('containerGroupName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "containers": [
+          {
+            "name": "[variables('containerName')]",
+            "properties": {
+              "image": "[variables('containerImage')]",
+              "ports": [
+                {
+                  "port": 4222,
+                  "protocol": "TCP"
+                },
+                {
+                  "port": 8222,
+                  "protocol": "TCP"
+                }
+              ],
+              "command": [
+                "nats-server",
+                "-a", "0.0.0.0",
+                "-p", "4222",
+                "-m", "8222",
+                "--user", "admin",
+                "--pass", "Admin@2025",
+                "-js"
+              ],
+              "resources": {
+                "requests": {
+                  "cpu": 1,
+                  "memoryInGB": 1.5
+                }
+              },
+              "volumeMounts": [
+                {
+                  "name": "natsdata",
+                  "mountPath": "/data"
+                }
+              ]
+            }
+          }
+        ],
+        "osType": "Linux",
+        "ipAddress": {
+          "type": "Public",
+          "dnsNameLabel": "[parameters('dnsNameLabel')]",
+          "ports": [
+            {
+              "port": 4222,
+              "protocol": "TCP"
+            },
+            {
+              "port": 8222,
+              "protocol": "TCP"
+            }
+          ]
+        },
+        "restartPolicy": "Always",
+        "volumes": [
+          {
+            "name": "natsdata",
+            "emptyDir": {}
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "containerIPv4Address": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ContainerInstance/containerGroups', parameters('containerGroupName'))).ipAddress.ip]"
+    },
+    "containerFQDN": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ContainerInstance/containerGroups', parameters('containerGroupName'))).ipAddress.fqdn]"
+    },
+    "natsClientUrl": {
+      "type": "string",
+      "value": "[concat('nats://', reference(resourceId('Microsoft.ContainerInstance/containerGroups', parameters('containerGroupName'))).ipAddress.fqdn, ':4222')]"
+    },
+    "monitoringUrl": {
+      "type": "string",
+      "value": "[concat('http://', reference(resourceId('Microsoft.ContainerInstance/containerGroups', parameters('containerGroupName'))).ipAddress.fqdn, ':8222')]"
+    }
+  }
+}
