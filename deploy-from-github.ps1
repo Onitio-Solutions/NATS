@@ -2,16 +2,15 @@
 # Run this after pushing code to GitHub and the Actions workflow completes
 
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$GithubUsername,  # Your GitHub username or org
-    
+    [string]$GithubOrg = "onitio-solutions",  # GitHub organization
+    [string]$RepoName = "nats",
     [string]$ResourceGroup = "StoreOne",
     [string]$Location = "northeurope",
     [string]$ContainerName = "nats-server-storeone",
     [string]$ImageTag = "latest"
 )
 
-$ImageName = "ghcr.io/${GithubUsername}/nats-server/nats-server:${ImageTag}"
+$ImageName = "ghcr.io/${GithubOrg}/${RepoName}/nats-server:${ImageTag}"
 $dnsLabel = "nats-storeone-$(Get-Random -Maximum 9999)"
 
 Write-Host "==========================================" -ForegroundColor Cyan

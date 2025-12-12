@@ -1,0 +1,110 @@
+name: Build and Deploy NATS to Azure
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/nats-server
+  AZURE_RESOURCE_GROUP: StoreOne
+  AZURE_LOCATION: northeurope
+  CONTAINER_NAME: nats-server-storeone
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=main-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Delete existing container (if exists)
+        continue-on-error: true
+        run: |
+          az container delete \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.CONTAINER_NAME }} \
+            --yes
+
+      - name: Deploy to Azure Container Instances
+        run: |
+          # Extract image with latest tag
+          IMAGE_URL=$(echo "${{ steps.meta.outputs.tags }}" | grep ':latest' || echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          
+          # Generate random DNS label
+          DNS_LABEL="nats-storeone-${{ github.run_number }}"
+          
+          az container create \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.CONTAINER_NAME }} \
+            --image $IMAGE_URL \
+            --registry-login-server ${{ env.REGISTRY }} \
+            --registry-username ${{ github.actor }} \
+            --registry-password ${{ secrets.GITHUB_TOKEN }} \
+            --os-type Linux \
+            --dns-name-label $DNS_LABEL \
+            --ports 4222 8222 \
+            --cpu 1 \
+            --memory 1.5 \
+            --restart-policy Always \
+            --location ${{ env.AZURE_LOCATION }}
+
+      - name: Get deployment info
+        id: deployment-info
+        run: |
+          CONTAINER_INFO=$(az container show \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.CONTAINER_NAME }} \
+            --output json)
+          
+          FQDN=$(echo $CONTAINER_INFO | jq -r '.ipAddress.fqdn')
+          IP=$(echo $CONTAINER_INFO | jq -r '.ipAddress.ip')
+          
+          echo "fqdn=$FQDN" >> $GITHUB_OUTPUT
+          echo "ip=$IP" >> $GITHUB_OUTPUT
+
+      - name: Display deployment information
+        run: |
+          echo "🎉 NATS Server Deployed Successfully!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📍 NATS URL:       nats://${{ steps.deployment-info.outputs.fqdn }}:4222"
+          echo "📊 Monitoring URL: http://${{ steps.deployment-info.outputs.fqdn }}:8222"
+          echo "🌐 Public IP:      ${{ steps.deployment-info.outputs.ip }}"
+          echo "🔐 Username:       admin"
+          echo "🔑 Password:       Admin@2025"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
