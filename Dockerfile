@@ -3,10 +3,6 @@ FROM nats:latest
 # Copy custom configuration
 COPY nats-server.conf /etc/nats/nats-server.conf
 
-# Create data directory for JetStream
-RUN mkdir -p /data/jetstream && \
-    chown -R nats:nats /data
-
 # Expose ports
 # 4222: Client connections
 # 8222: HTTP monitoring
