@@ -1,7 +1,7 @@
 FROM nats:latest
 
 # Copy custom configuration
-COPY nats-server.conf /etc/nats/nats-server.conf
+COPY nats-server.conf /nats-server.conf
 
 # Expose ports
 # 4222: Client connections
@@ -10,4 +10,4 @@ COPY nats-server.conf /etc/nats/nats-server.conf
 EXPOSE 4222 8222 6222
 
 # Run NATS server with custom config
-CMD ["nats-server", "-c", "/etc/nats/nats-server.conf"]
+CMD ["nats-server", "-c", "/nats-server.conf"]
