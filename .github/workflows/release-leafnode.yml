@@ -1,0 +1,135 @@
+name: Build Leaf Node Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get NATS Server version
+        id: nats-version
+        run: echo "version=v2.10.22" >> $GITHUB_OUTPUT
+
+      - name: Download NATS Server binaries
+        run: |
+          mkdir -p dist/windows dist/linux dist/macos
+          
+          # Windows
+          curl -L https://github.com/nats-io/nats-server/releases/download/${{ steps.nats-version.outputs.version }}/nats-server-${{ steps.nats-version.outputs.version }}-windows-amd64.zip -o windows.zip
+          unzip -j windows.zip -d dist/windows/
+          
+          # Linux
+          curl -L https://github.com/nats-io/nats-server/releases/download/${{ steps.nats-version.outputs.version }}/nats-server-${{ steps.nats-version.outputs.version }}-linux-amd64.tar.gz -o linux.tar.gz
+          tar -xzf linux.tar.gz -C dist/linux/ --strip-components=1
+          
+          # macOS
+          curl -L https://github.com/nats-io/nats-server/releases/download/${{ steps.nats-version.outputs.version }}/nats-server-${{ steps.nats-version.outputs.version }}-darwin-amd64.tar.gz -o macos.tar.gz
+          tar -xzf macos.tar.gz -C dist/macos/ --strip-components=1
+
+      - name: Create Windows package
+        run: |
+          cd dist/windows
+          cp ../../leafnode/nats-leafnode.conf .
+          cp ../../leafnode/README.md .
+          
+          cat > start-leafnode.bat << 'EOF'
+          @echo off
+          echo Starting NATS Leaf Node...
+          echo Local: nats://localhost:4222 (user: local, pass: local123)
+          echo Azure: nats-storeone-6537.northeurope.azurecontainer.io
+          echo.
+          nats-server.exe -c nats-leafnode.conf
+          EOF
+          
+          cat > start-leafnode.ps1 << 'EOF'
+          Write-Host "Starting NATS Leaf Node..." -ForegroundColor Cyan
+          Write-Host "Local: nats://localhost:4222 (user: local, pass: local123)" -ForegroundColor Green
+          Write-Host "Azure: nats-storeone-6537.northeurope.azurecontainer.io" -ForegroundColor Yellow
+          & ".\nats-server.exe" -c nats-leafnode.conf
+          EOF
+          
+          zip -r ../nats-leafnode-windows-amd64.zip .
+
+      - name: Create Linux package
+        run: |
+          cd dist/linux
+          cp ../../leafnode/nats-leafnode.conf .
+          cp ../../leafnode/README.md .
+          
+          cat > start-leafnode.sh << 'EOF'
+          #!/bin/bash
+          echo "Starting NATS Leaf Node..."
+          echo "Local: nats://localhost:4222 (user: local, pass: local123)"
+          echo "Azure: nats-storeone-6537.northeurope.azurecontainer.io"
+          echo ""
+          ./nats-server -c nats-leafnode.conf
+          EOF
+          chmod +x start-leafnode.sh
+          chmod +x nats-server
+          
+          tar -czf ../nats-leafnode-linux-amd64.tar.gz .
+
+      - name: Create macOS package
+        run: |
+          cd dist/macos
+          cp ../../leafnode/nats-leafnode.conf .
+          cp ../../leafnode/README.md .
+          
+          cat > start-leafnode.sh << 'EOF'
+          #!/bin/bash
+          echo "Starting NATS Leaf Node..."
+          echo "Local: nats://localhost:4222 (user: local, pass: local123)"
+          echo "Azure: nats-storeone-6537.northeurope.azurecontainer.io"
+          echo ""
+          ./nats-server -c nats-leafnode.conf
+          EOF
+          chmod +x start-leafnode.sh
+          chmod +x nats-server
+          
+          tar -czf ../nats-leafnode-darwin-amd64.tar.gz .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/nats-leafnode-windows-amd64.zip
+            dist/nats-leafnode-linux-amd64.tar.gz
+            dist/nats-leafnode-darwin-amd64.tar.gz
+          body: |
+            # NATS Leaf Node Release
+            
+            Pre-configured NATS leaf node packages for connecting on-premises devices to Azure NATS server.
+            
+            ## Quick Start
+            
+            ### Windows
+            1. Download `nats-leafnode-windows-amd64.zip`
+            2. Extract to a folder
+            3. Run `start-leafnode.bat` or `start-leafnode.ps1`
+            
+            ### Linux/macOS
+            1. Download the appropriate package
+            2. Extract: `tar -xzf nats-leafnode-*.tar.gz`
+            3. Run: `./start-leafnode.sh`
+            
+            ## Connection Details
+            - **Local URL**: `nats://localhost:4222`
+            - **Username**: `local`
+            - **Password**: `local123`
+            - **Monitoring**: `http://localhost:8222`
+            
+            ## Azure Connection
+            - Automatically connects to: `nats-storeone-6537.northeurope.azurecontainer.io:4222`
+            - Uses admin credentials to authenticate
+            
+            See README.md in the package for full documentation.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
